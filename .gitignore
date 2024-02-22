@@ -1,0 +1,5 @@
+bin/
+obj/
+config.json
+.vs/
+.vscode/
