@@ -2,7 +2,6 @@
 
 public enum Games
 {
-    None,
     Wordle,
     Bandle,
     GuessTheGame,

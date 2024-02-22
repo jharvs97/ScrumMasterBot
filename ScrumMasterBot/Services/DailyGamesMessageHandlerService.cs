@@ -2,14 +2,14 @@
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using Discord;
 using Discord.WebSocket;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using ScrumMasterBot.Dailies;
 
 namespace ScrumMasterBot.Services;
 
-public class DailyGamesMessageHandlerService(DiscordSocketClient client, Dailies.Manager dailies) : IHostedService
+public class DailyGamesMessageHandlerService(DiscordSocketClient client, Dailies.Manager dailies, ILogger<DailyGamesMessageHandlerService> logger) : IHostedService
 {
     public Task StartAsync(CancellationToken cancellationToken)
     {
@@ -35,7 +35,8 @@ public class DailyGamesMessageHandlerService(DiscordSocketClient client, Dailies
         var id = new Id(userMessage.Timestamp.ToLocalTime().Date);
         var gameState = dailies.GetOrPutGameState(id);
 
-        if (gameState.TryUpdate(userMessage))
+        var error = gameState.TryUpdate(userMessage);
+        if (error is null)
         {
             string gameStateMessage = FormatGameStateString(id, gameState);
             
@@ -50,6 +51,10 @@ public class DailyGamesMessageHandlerService(DiscordSocketClient client, Dailies
             }
 
             await userMessage.DeleteAsync();
+        }
+        else
+        {
+            logger.LogError(error.Reason);
         }
     }
 

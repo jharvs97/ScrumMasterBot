@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 using Discord.WebSocket;
+using Microsoft.VisualBasic;
 
 namespace ScrumMasterBot.Dailies;
 
@@ -11,7 +12,7 @@ public class State
 {
     public IReadOnlyDictionary<ulong, UserState> UserStates => _gameScores.ToImmutableDictionary();
 
-    public bool TryUpdate(SocketUserMessage message)
+    public IError? TryUpdate(SocketUserMessage message)
     {
         if (!_gameScores.TryGetValue(message.Author.Id, out var userState))
         {
@@ -27,16 +28,17 @@ public class State
 public class UserState
 {
     public IReadOnlyCollection<string> Scores => _scores.Select(kvp => kvp.Value).ToImmutableArray();
-    public bool TryAddScore(string input)
+    public IError? TryAddScore(string input)
     {
-        var (game, result) = GameParser.Parse(input);
-        if (game is not Games.None && !string.IsNullOrEmpty(result) && !_scores.ContainsKey(game))
+        var result = ParserUtils.Parse(input);
+        if (result is not IError err)
         {
-            _scores[game] = result;
-            return true;
+            var (game, score) = result.Value;
+            _scores[game] = score;
+            return null;
         }
-        return false;
-    }
 
+        return new Error<string>(err.Reason);
+    }
     ConcurrentDictionary<Games, string> _scores = new();
 }

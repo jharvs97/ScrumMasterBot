@@ -2,7 +2,6 @@
 
 namespace ScrumMasterBot.Dailies;
 
-
 public readonly struct Id : IEquatable<Id>
 {
     public readonly string Date => _dateString;
