@@ -1,4 +1,5 @@
-﻿using System.Text;
+﻿using System.Collections.Concurrent;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Discord;
@@ -21,7 +22,7 @@ public class DailyGamesMessageHandlerService(DiscordSocketClient client, Dailies
         return Task.CompletedTask;
     }
 
-    static ulong? _messageId;
+    static ConcurrentDictionary<ulong, ulong> _messageIds = new();
 
     async Task OnMessageRecievedAsync(SocketMessage message)
     {
@@ -37,15 +38,15 @@ public class DailyGamesMessageHandlerService(DiscordSocketClient client, Dailies
         if (gameState.TryUpdate(userMessage))
         {
             string gameStateMessage = FormatGameStateString(id, gameState);
-
-            if (_messageId is null)
+            
+            if (_messageIds.ContainsKey(message.Channel.Id))
             {
-                var botMessage = await message.Channel.SendMessageAsync(gameStateMessage);
-                _messageId = botMessage.Id;
+                await message.Channel.ModifyMessageAsync(_messageIds[message.Channel.Id], props => props.Content = gameStateMessage);
             }
             else
             {
-                await message.Channel.ModifyMessageAsync((ulong)_messageId, props => props.Content = gameStateMessage);
+                var botMessage = await message.Channel.SendMessageAsync(gameStateMessage);
+                _messageIds[message.Channel.Id] = botMessage.Id;
             }
 
             await userMessage.DeleteAsync();

@@ -4,12 +4,13 @@ using System.Collections.Immutable;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using Discord;
 
 namespace ScrumMasterBot.Dailies;
 
 public static class GameParser
 {
-    public static (Games, string) Parse(string input)
+    public static (Games game, string score) Parse(string input)
     {
         var result = (Games.None, string.Empty);
 
@@ -17,29 +18,29 @@ public static class GameParser
             return result;
 
         var lines = input.Split('\n').ToList();
-        var firstLine = lines.First();
 
         try
         {
-            Match? match = null;
-            if ((match = Regexes.WordleBandle.Match(firstLine)).Success)
+            foreach (var regex in Reggies)
             {
-                var name = match.Groups[1].Value;
-                if (Enum.TryParse<Games>(name, true, out var game))
+                var match = regex.Match(input);
+                if (match.Success)
                 {
-                    var score = game switch
+                    var name = match.Groups[1].Value;
+                    if (Enum.TryParse<Games>(name, true, out var game))
                     {
-                        Games.Wordle => ParseWordleScore(lines),
-                        Games.Bandle => ParseBandleScore(lines),
-                        _ => throw new ArgumentException("wtf")
-                    };
+                        var score = game switch
+                        {
+                            Games.Wordle => ParseWordle(lines),
+                            Games.Bandle => ParseBandle(lines),
+                            Games.GuessTheGame => ParseGuessTheGame(lines),
+                            Games.Connections => ParseConnections(lines),
+                            _ => throw new ArgumentException("wtf")
+                        };
 
-                    result = (game, $"{name}: {score}");
+                        result = (game, $"{name}: {score}");
+                    }
                 }
-            }
-            else if ((match = Regexes.GuessTheGame.Match(firstLine)).Success)
-            {
-                result = (Games.GuessTheGame, ParseGuessTheGameScore(lines));
             }
         }
         catch (Exception)
@@ -48,58 +49,77 @@ public static class GameParser
         return result;
     }
 
-    static string ParseWordleScore(IReadOnlyCollection<string> lines)
+    static readonly Regex WordleBandleRegex = new Regex(@"(Wordle|Bandle) #?[0-9]+ ([0-6]\/[0-6])", RegexOptions.Compiled);
+    static readonly Regex GuessTheGameRegex = new Regex(@"#(GuessTheGame) #[0-9]+", RegexOptions.Compiled);
+    static readonly Regex ConnectionsRegex = new Regex(@"(Connections)\s?\nPuzzle\s#[0-9]+", RegexOptions.Compiled | RegexOptions.Multiline);
+
+    static ImmutableArray<Regex> Reggies = [
+        WordleBandleRegex,
+        GuessTheGameRegex,
+        ConnectionsRegex,
+    ];
+
+    static string ParseWordle(IReadOnlyCollection<string> lines)
     {
         var sb = new StringBuilder();
 
         foreach (var line in lines.Skip(2))
         {
             int count = 0;
-            foreach (var rune in line.EnumerateRunes())
+            foreach (var square in line.EnumerateRunes())
             {
-                if (rune == YellowSquare || rune == GreenSquare)
+                if (square == YellowSquare|| square == GreenSquare)
                 {
                     count += 1;
                 }
             }
-
-            if (Discord.Emoji.TryParse($":{DigitToString[count]}:", out var emoji))
-            {
-                sb.Append(emoji);
-            }
-
+            
+            sb.Append(Regex.Unescape($"{count}\\uFE0F\\u20E3"));
         }
 
         return sb.ToString();
     }
 
-    static string ParseBandleScore(IReadOnlyCollection<string> lines)
+    static string ParseBandle(IReadOnlyCollection<string> lines)
     {
         return lines.Skip(1).First();
     }
 
-    static string ParseGuessTheGameScore(IReadOnlyCollection<string> lines)
+    static string ParseGuessTheGame(IReadOnlyCollection<string> lines)
     {
         return lines.Skip(2).First();
     }
 
-    static readonly Rune BlackSquare = new(0x2B1B);
-    static readonly Rune WhiteSquare = new(0x2B1C);
-    static readonly Rune RedSquare = new(0x1F7E5);
+    static string ParseConnections(IReadOnlyCollection<string> lines)
+    {
+        var sb = new StringBuilder();
+
+        foreach (var line in lines.Skip(2))
+        {
+            var runes = line.EnumerateRunes();
+            runes.MoveNext();
+            var first = runes.Current;
+            var current = first;
+            
+            while (first == current && runes.MoveNext())
+            {
+                current = runes.Current;
+            }
+
+            if (!runes.MoveNext())
+            {
+                sb.Append(first);
+            }
+            else
+            {
+                sb.Append(X);
+            }
+        }
+
+        return sb.ToString();
+    }
+
     static readonly Rune YellowSquare = new(0x1F7E8);
-    static readonly Rune BlueSquare = new(0x1F7E6);
     static readonly Rune GreenSquare = new(0x1F7E9);
-    static readonly Rune PurpleSquare = new(0x1F7EA);
-    static ImmutableArray<string> DigitToString = [
-        "zero",
-        "one",
-        "two",
-        "three",
-        "four",
-        "five",
-        "six",
-        "seven",
-        "eight",
-        "nine",
-    ];
+    static readonly string X = char.ConvertFromUtf32(0x274C);
 }
